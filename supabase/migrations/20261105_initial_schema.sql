@@ -241,10 +241,10 @@ create policy tasks_manager_insert_policy on public.tasks
 for insert to authenticated
 with check (public.current_user_role() = 'manager' and created_by = auth.uid());
 
-create policy tasks_update_policy on public.tasks
+create policy tasks_manager_update_policy on public.tasks
 for update to authenticated
-using (public.current_user_role() = 'manager' or assignee_id = auth.uid())
-with check (public.current_user_role() = 'manager' or assignee_id = auth.uid());
+using (public.current_user_role() = 'manager')
+with check (public.current_user_role() = 'manager');
 
 create policy tasks_manager_delete_policy on public.tasks
 for delete to authenticated

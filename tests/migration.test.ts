@@ -25,6 +25,11 @@ describe('Supabase migration', () => {
     expect(migration).not.toMatch(/create policy .* on public\.task_status_history[\s\S]*for (insert|update|delete)/i)
   })
 
+  it('allows direct task updates only to managers', () => {
+    expect(migration).toContain('create policy tasks_manager_update_policy on public.tasks')
+    expect(migration).not.toContain("assignee_id = auth.uid())\nwith check (public.current_user_role() = 'manager' or assignee_id = auth.uid())")
+  })
+
   it('does not add an open registration policy', () => {
     expect(migration).not.toMatch(/create policy .* on auth\.users/i)
     expect(migration).not.toContain('signUp')
