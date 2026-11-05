@@ -52,21 +52,25 @@ export type Database = {
         Row: Profile
         Insert: Pick<Profile, 'id' | 'full_name' | 'role'>
         Update: Partial<Pick<Profile, 'full_name' | 'role'>>
+        Relationships: []
       }
       construction_objects: {
         Row: ConstructionObject
-        Insert: Pick<ConstructionObject, 'name' | 'address'>
+        Insert: Pick<ConstructionObject, 'name' | 'address' | 'created_by'>
         Update: Partial<Pick<ConstructionObject, 'name' | 'address'>>
+        Relationships: []
       }
       tasks: {
         Row: Task
-        Insert: Pick<Task, 'title' | 'description' | 'object_id' | 'assignee_id'>
+        Insert: Pick<Task, 'title' | 'description' | 'object_id' | 'assignee_id' | 'created_by'>
         Update: Partial<Pick<Task, 'title' | 'description' | 'object_id' | 'assignee_id' | 'status'>>
+        Relationships: []
       }
       task_status_history: {
         Row: TaskStatusHistory
         Insert: never
         Update: never
+        Relationships: []
       }
     }
     Functions: {

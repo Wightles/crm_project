@@ -6,13 +6,34 @@ export type DashboardTask = {
   id: string
   title: string
   object: string
+  objectId: string
   assignee: string
+  assigneeId: string
+  description: string
+  statusCode: TaskStatus
   status: string
   createdAt: string
 }
 
+export type DashboardObject = {
+  id: string
+  name: string
+  address: string
+  taskCount: number
+}
+
+export type TaskHistoryItem = {
+  id: string
+  fromStatus: TaskStatus | null
+  toStatus: TaskStatus
+  comment: string | null
+  changedBy: string
+  changedAt: string
+}
+
 export type DashboardData = {
-  objectCount: number
+  objects: DashboardObject[]
+  executors: Profile[]
   tasks: DashboardTask[]
 }
 
@@ -62,17 +83,109 @@ export async function loadDashboardData(): Promise<DashboardData> {
   const objectNames = new Map(objects.map((item) => [item.id, item.name]))
   const profileNames = new Map(profilesResult.data.map((item) => [item.id, item.full_name]))
 
-  return {
-    objectCount: objects.length,
-    tasks: tasksResult.data.map((task) => ({
+  const tasks = tasksResult.data.map((task) => ({
       id: task.id,
       title: task.title,
       object: objectNames.get(task.object_id) ?? 'Объект не найден',
+      objectId: task.object_id,
       assignee: profileNames.get(task.assignee_id) ?? 'Исполнитель не найден',
+      assigneeId: task.assignee_id,
+      description: task.description,
+      statusCode: task.status,
       status: statusLabels[task.status],
       createdAt: formatDate(task.created_at),
+    }))
+
+  const taskCounts = new Map<string, number>()
+  for (const task of tasks) taskCounts.set(task.objectId, (taskCounts.get(task.objectId) ?? 0) + 1)
+
+  return {
+    objects: objects.map((object) => ({
+      id: object.id,
+      name: object.name,
+      address: object.address,
+      taskCount: taskCounts.get(object.id) ?? 0,
     })),
+    executors: profilesResult.data.filter((profile) => profile.role === 'executor'),
+    tasks,
   }
+}
+
+export async function createObject(name: string, address: string, createdBy: string) {
+  if (!supabase) throw new Error('Supabase не настроен')
+  const { data, error } = await supabase
+    .from('construction_objects')
+    .insert({ name, address, created_by: createdBy })
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function createTask(input: {
+  title: string
+  description: string
+  objectId: string
+  assigneeId: string
+  createdBy: string
+}) {
+  if (!supabase) throw new Error('Supabase не настроен')
+  const { data, error } = await supabase
+    .from('tasks')
+    .insert({
+      title: input.title,
+      description: input.description,
+      object_id: input.objectId,
+      assignee_id: input.assigneeId,
+      created_by: input.createdBy,
+    })
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function changeTaskStatus(taskId: string, status: TaskStatus, comment = '') {
+  if (!supabase) throw new Error('Supabase не настроен')
+  const { error } = await supabase.rpc('change_task_status', {
+    p_task_id: taskId,
+    p_new_status: status,
+    p_comment: comment || null,
+  })
+
+  if (error) throw error
+}
+
+export async function getTaskHistory(taskId: string): Promise<TaskHistoryItem[]> {
+  if (!supabase) throw new Error('Supabase не настроен')
+
+  const { data, error } = await supabase
+    .from('task_status_history')
+    .select('*')
+    .eq('task_id', taskId)
+    .order('changed_at', { ascending: false })
+
+  if (error) throw error
+
+  const userIds = [...new Set(data.map((item) => item.changed_by))]
+  const { data: profiles, error: profilesError } = await supabase
+    .from('profiles')
+    .select('*')
+    .in('id', userIds)
+
+  if (profilesError) throw profilesError
+  const profileNames = new Map(profiles.map((profile) => [profile.id, profile.full_name]))
+
+  return data.map((item) => ({
+    id: item.id,
+    fromStatus: item.from_status,
+    toStatus: item.to_status,
+    comment: item.comment,
+    changedBy: profileNames.get(item.changed_by) ?? 'Пользователь',
+    changedAt: formatDate(item.changed_at),
+  }))
 }
 
 function formatDate(value: string) {

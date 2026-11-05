@@ -182,6 +182,24 @@ $$;
 revoke all on function public.change_task_status(uuid, public.task_status, text) from public;
 grant execute on function public.change_task_status(uuid, public.task_status, text) to authenticated;
 
+create or replace function public.can_view_profile(profile_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.current_user_role() = 'manager'
+    or profile_id = auth.uid()
+    or exists (
+      select 1
+      from public.tasks
+      join public.task_status_history on task_status_history.task_id = tasks.id
+      where tasks.assignee_id = auth.uid()
+        and task_status_history.changed_by = profile_id
+    )
+$$;
+
 alter table public.profiles enable row level security;
 alter table public.construction_objects enable row level security;
 alter table public.tasks enable row level security;
@@ -189,7 +207,7 @@ alter table public.task_status_history enable row level security;
 
 create policy profiles_select_policy on public.profiles
 for select to authenticated
-using (id = auth.uid() or public.current_user_role() = 'manager');
+using (public.can_view_profile(id));
 
 create policy objects_select_policy on public.construction_objects
 for select to authenticated
