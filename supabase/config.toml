@@ -1,0 +1,6 @@
+project_id = "mini-crm-objects-tasks"
+
+[auth]
+enabled = true
+enable_signup = false
+site_url = "http://127.0.0.1:5173"

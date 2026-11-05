@@ -77,8 +77,10 @@ function App() {
   const [selectedTask, setSelectedTask] = useState<DashboardTask | null>(null)
   const [taskHistory, setTaskHistory] = useState<TaskHistoryItem[]>([])
   const [objectFilter, setObjectFilter] = useState<string | null>(null)
+  const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null)
   const [showObjectForm, setShowObjectForm] = useState(false)
   const [showTaskForm, setShowTaskForm] = useState(false)
+  const [newTaskObjectId, setNewTaskObjectId] = useState<string | null>(null)
   const [editingObject, setEditingObject] = useState<DashboardObject | null>(null)
   const [editingTask, setEditingTask] = useState<DashboardTask | null>(null)
   const [loading, setLoading] = useState(isSupabaseConfigured)
@@ -170,6 +172,7 @@ function App() {
       }
       setShowObjectForm(false)
       setEditingObject(null)
+      if (objectId) setSelectedObjectId(objectId)
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : 'Не удалось создать объект')
     } finally {
@@ -219,6 +222,7 @@ function App() {
       }
       setShowTaskForm(false)
       setEditingTask(null)
+      setNewTaskObjectId(null)
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : 'Не удалось создать задачу')
     } finally {
@@ -238,6 +242,7 @@ function App() {
         setDemoObjects((items) => items.filter((item) => item.id !== object.id))
         setDemoTasks((items) => items.filter((item) => item.objectId !== object.id))
       }
+      if (selectedObjectId === object.id) setSelectedObjectId(null)
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : 'Не удалось удалить объект')
     } finally {
@@ -328,7 +333,7 @@ function App() {
         <div className="brand"><div className="brand-mark">ОТ</div><div><strong>Объекты</strong><span>и задачи</span></div></div>
         <nav className="main-nav" aria-label="Основная навигация">
           <NavItem icon={<LayoutDashboard size={18} />} label="Обзор" active={activeSection === 'Обзор'} onClick={() => { setActiveSection('Обзор'); setObjectFilter(null) }} />
-          <NavItem icon={<Building2 size={18} />} label="Объекты" active={activeSection === 'Объекты'} onClick={() => setActiveSection('Объекты')} />
+          <NavItem icon={<Building2 size={18} />} label="Объекты" active={activeSection === 'Объекты'} onClick={() => { setSelectedObjectId(null); setActiveSection('Объекты') }} />
           <NavItem icon={<ClipboardList size={18} />} label="Мои задачи" active={activeSection === 'Мои задачи'} onClick={() => { setActiveSection('Мои задачи'); setObjectFilter(null) }} />
         </nav>
         <div className="sidebar-footer">
@@ -345,7 +350,7 @@ function App() {
 
         <section className="page-content">
           {activeSection === 'Объекты' ? (
-            <ObjectsPanel objects={objects} manager={userRole === 'manager'} onAdd={() => setShowObjectForm(true)} onEdit={setEditingObject} onDelete={(object) => void handleDeleteObject(object)} onSelect={(id) => { setObjectFilter(id); setActiveSection('Обзор') }} />
+            selectedObjectId ? <ObjectDetailsPanel object={objects.find((item) => item.id === selectedObjectId)} tasks={tasks.filter((task) => task.objectId === selectedObjectId)} manager={userRole === 'manager'} search={search} onSearch={setSearch} onBack={() => setSelectedObjectId(null)} onAddTask={() => { setNewTaskObjectId(selectedObjectId); setShowTaskForm(true) }} onEdit={(object) => setEditingObject(object)} onDelete={(object) => void handleDeleteObject(object)} onSelectTask={openTask} /> : <ObjectsPanel objects={objects} manager={userRole === 'manager'} onAdd={() => setShowObjectForm(true)} onEdit={setEditingObject} onDelete={(object) => void handleDeleteObject(object)} onSelect={(id) => setSelectedObjectId(id)} />
           ) : activeSection === 'Настройки' ? (
             <SettingsPanel profile={profile} demo={!isLive} />
           ) : (
@@ -362,7 +367,7 @@ function App() {
       </main>
 
       {(showObjectForm || editingObject) && <ObjectForm object={editingObject} busy={actionBusy} onClose={() => { setShowObjectForm(false); setEditingObject(null) }} onSubmit={handleSaveObject} />}
-      {(showTaskForm || editingTask) && <TaskForm task={editingTask} objects={objects} executors={executors} busy={actionBusy} onClose={() => { setShowTaskForm(false); setEditingTask(null) }} onSubmit={handleSaveTask} />}
+      {(showTaskForm || editingTask) && <TaskForm task={editingTask} defaultObjectId={newTaskObjectId ?? undefined} objects={objects} executors={executors} busy={actionBusy} onClose={() => { setShowTaskForm(false); setEditingTask(null); setNewTaskObjectId(null) }} onSubmit={handleSaveTask} />}
       {selectedTask && <TaskModal task={selectedTask} history={taskHistory} role={userRole} busy={actionBusy} onClose={() => setSelectedTask(null)} onEdit={() => { setEditingTask(selectedTask); setSelectedTask(null) }} onDelete={() => void handleDeleteTask(selectedTask)} onStatusChange={handleStatusChange} />}
     </div>
   )
@@ -384,6 +389,12 @@ function ObjectsPanel({ objects, manager, onAdd, onEdit, onDelete, onSelect }: {
   return <section className="objects-section"><div className="section-heading"><div><p className="eyebrow">Строительные площадки</p><h2>Объекты</h2></div>{manager && <button className="primary-button" type="button" onClick={onAdd}><Plus size={17} />Новый объект</button>}</div><div className="object-grid">{objects.length ? objects.map((object) => <article className="object-card" key={object.id}><button className="object-card-main" type="button" onClick={() => onSelect(object.id)}><div className="object-card-top"><span className="object-icon"><Building2 size={20} /></span><span className="object-task-count">{object.taskCount} задач</span></div><strong>{object.name}</strong><span className="object-address"><MapPin size={14} />{object.address}</span><span className="object-link">Открыть задачи</span></button>{manager && <div className="object-actions"><button type="button" onClick={() => onEdit(object)}><Pencil size={14} />Изменить</button><button type="button" className="danger-link" onClick={() => onDelete(object)}><Trash2 size={14} />Удалить</button></div>}</article>) : <div className="panel empty-state">Объектов пока нет</div>}</div></section>
 }
 
+function ObjectDetailsPanel({ object, tasks, manager, search, onSearch, onBack, onAddTask, onEdit, onDelete, onSelectTask }: { object: DashboardObject | undefined; tasks: DashboardTask[]; manager: boolean; search: string; onSearch: (value: string) => void; onBack: () => void; onAddTask: () => void; onEdit: (object: DashboardObject) => void; onDelete: (object: DashboardObject) => void; onSelectTask: (task: DashboardTask) => void }) {
+  if (!object) return <div className="panel empty-state">Объект не найден</div>
+
+  return <section className="object-details"><button className="back-button" type="button" onClick={onBack}>← Все объекты</button><div className="object-details-heading"><div><p className="eyebrow">Карточка объекта</p><h2>{object.name}</h2><span className="object-details-address"><MapPin size={15} />{object.address}</span></div><div className="object-details-actions">{manager && <><button className="secondary-button" type="button" onClick={() => onEdit(object)}><Pencil size={15} />Изменить</button><button className="secondary-button danger-link" type="button" onClick={() => onDelete(object)}><Trash2 size={15} />Удалить</button></>}</div></div><TasksPanel tasks={tasks} manager={manager} search={search} objectFilter={object.id} onSearch={onSearch} onClearObjectFilter={onBack} onAdd={onAddTask} onSelect={onSelectTask} /></section>
+}
+
 function SettingsPanel({ profile, demo }: { profile: Profile | null; demo: boolean }) {
   return <section className="panel settings-panel"><div className="settings-icon"><Settings size={20} /></div><p className="eyebrow">Профиль</p><h2>{profile?.full_name ?? 'Алексей Кузнецов'}</h2><p className="settings-description">Роль: {profile?.role === 'executor' ? 'исполнитель' : 'постановщик'}. {demo ? 'Сейчас открыт демонстрационный режим.' : 'Данные загружены из Supabase.'}</p></section>
 }
@@ -394,10 +405,10 @@ function ObjectForm({ object, busy, onClose, onSubmit }: { object: DashboardObje
   return <Modal title={object ? 'Редактирование объекта' : 'Новый объект'} onClose={onClose}><form className="entity-form" onSubmit={(event) => { event.preventDefault(); void onSubmit(name.trim(), address.trim(), object?.id) }}><Field label="Название объекта"><input value={name} onChange={(event) => setName(event.target.value)} placeholder="Например, ЖК «Северный парк»" required /></Field><Field label="Адрес"><input value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Город, улица, дом" required /></Field><FormActions busy={busy} onClose={onClose} submitLabel={object ? 'Сохранить' : 'Создать объект'} /></form></Modal>
 }
 
-function TaskForm({ task, objects, executors, busy, onClose, onSubmit }: { task: DashboardTask | null; objects: DashboardObject[]; executors: Profile[]; busy: boolean; onClose: () => void; onSubmit: (title: string, description: string, objectId: string, assigneeId: string, taskId?: string) => Promise<void> }) {
+function TaskForm({ task, defaultObjectId, objects, executors, busy, onClose, onSubmit }: { task: DashboardTask | null; defaultObjectId?: string; objects: DashboardObject[]; executors: Profile[]; busy: boolean; onClose: () => void; onSubmit: (title: string, description: string, objectId: string, assigneeId: string, taskId?: string) => Promise<void> }) {
   const [title, setTitle] = useState(task?.title ?? '')
   const [description, setDescription] = useState(task?.description ?? '')
-  const [objectId, setObjectId] = useState(task?.objectId ?? objects[0]?.id ?? '')
+  const [objectId, setObjectId] = useState(task?.objectId ?? defaultObjectId ?? objects[0]?.id ?? '')
   const [assigneeId, setAssigneeId] = useState(task?.assigneeId ?? executors[0]?.id ?? '')
   return <Modal title={task ? 'Редактирование задачи' : 'Новая задача'} onClose={onClose}><form className="entity-form" onSubmit={(event) => { event.preventDefault(); void onSubmit(title.trim(), description.trim(), objectId, assigneeId, task?.id) }}><Field label="Название задачи"><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Что нужно сделать" required /></Field><Field label="Описание"><textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Коротко опишите результат" rows={4} /></Field><Field label="Объект"><select value={objectId} onChange={(event) => setObjectId(event.target.value)} required>{objects.map((object) => <option key={object.id} value={object.id}>{object.name}</option>)}</select></Field><Field label="Исполнитель"><select value={assigneeId} onChange={(event) => setAssigneeId(event.target.value)} required>{executors.length ? executors.map((executor) => <option key={executor.id} value={executor.id}>{executor.full_name}</option>) : <option value="">Нет доступных исполнителей</option>}</select></Field><FormActions busy={busy} onClose={onClose} submitLabel={task ? 'Сохранить' : 'Создать задачу'} /></form></Modal>
 }

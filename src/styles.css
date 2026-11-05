@@ -101,6 +101,12 @@ tbody tr:hover { background: #fcfcfc; }
 .object-actions button:hover, .modal-action:hover { text-decoration: underline; }
 .danger-link { color: #333 !important; }
 .empty-state { padding: 42px; color: #777; text-align: center; }
+.back-button { margin-bottom: 18px; padding: 0; border: 0; background: transparent; color: #666; font-size: 13px; }
+.back-button:hover { color: #111; text-decoration: underline; }
+.object-details-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 26px; }
+.object-details-heading h2 { margin: 0 0 8px; color: #171717; font-size: 25px; font-weight: 650; }
+.object-details-address { display: flex; align-items: center; gap: 6px; color: #666; font-size: 13px; }
+.object-details-actions { display: flex; gap: 8px; }
 .settings-panel { max-width: 520px; padding: 24px; }
 .settings-icon { margin-bottom: 20px; color: #444; }
 .settings-panel h2 { margin: 0 0 8px; font-size: 20px; }
@@ -195,4 +201,6 @@ textarea { resize: vertical; }
   .task-detail-heading { flex-direction: column; }
   .task-heading-actions { justify-content: flex-start; }
   .detail-grid { grid-template-columns: 1fr; }
+  .object-details-heading { flex-direction: column; }
+  .object-details-actions { width: 100%; }
 }
