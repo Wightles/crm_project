@@ -68,11 +68,12 @@ export type Database = {
       }
       task_status_history: {
         Row: TaskStatusHistory
-        Insert: never
+        Insert: Pick<TaskStatusHistory, 'task_id' | 'changed_by' | 'from_status' | 'to_status' | 'comment'>
         Update: never
         Relationships: []
       }
     }
+    Views: Record<string, never>
     Functions: {
       change_task_status: {
         Args: {
@@ -83,5 +84,10 @@ export type Database = {
         Returns: Task
       }
     }
+    Enums: {
+      user_role: UserRole
+      task_status: TaskStatus
+    }
+    CompositeTypes: Record<string, never>
   }
 }

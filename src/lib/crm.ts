@@ -195,7 +195,7 @@ export async function changeTaskStatus(taskId: string, status: TaskStatus, comme
   const { error } = await supabase.rpc('change_task_status', {
     p_task_id: taskId,
     p_new_status: status,
-    p_comment: comment || null,
+    p_comment: comment || undefined,
   })
 
   if (error) throw error
