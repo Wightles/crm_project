@@ -1,3 +1,4 @@
+-- роли нужны для разделения действий постановщика и исполнителя
 create type public.user_role as enum ('manager', 'executor');
 create type public.task_status as enum ('new', 'in_progress', 'in_review', 'accepted', 'rework');
 
@@ -71,6 +72,7 @@ create trigger tasks_touch_updated_at
 before update on public.tasks
 for each row execute function public.touch_updated_at();
 
+-- прямой запрос к tasks не должен обходить правила переходов
 create or replace function public.validate_task_status_change()
 returns trigger
 language plpgsql
@@ -121,6 +123,7 @@ create trigger tasks_validate_status_change
 before update of status on public.tasks
 for each row execute function public.validate_task_status_change();
 
+-- история создаётся базой и не редактируется из интерфейса
 create or replace function public.record_task_status_change()
 returns trigger
 language plpgsql
@@ -151,6 +154,7 @@ after update of status on public.tasks
 for each row when (old.status is distinct from new.status)
 execute function public.record_task_status_change();
 
+-- статус меняется через одну функцию, чтобы комментарий попал в историю
 create or replace function public.change_task_status(
   p_task_id uuid,
   p_new_status public.task_status,
@@ -200,6 +204,7 @@ as $$
     )
 $$;
 
+-- rls остаётся последней проверкой даже при обращении к supabase напрямую
 alter table public.profiles enable row level security;
 alter table public.construction_objects enable row level security;
 alter table public.tasks enable row level security;

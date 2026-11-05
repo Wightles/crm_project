@@ -7,6 +7,7 @@ export type TaskAction = {
 }
 
 export function getAvailableTaskActions(status: TaskStatus, role: UserRole): TaskAction[] {
+  // интерфейс показывает только те действия, которые разрешены для текущей роли
   if (role === 'executor' && status === 'new') {
     return [{ status: 'in_progress', label: 'Взять в работу', hint: 'Задача перейдёт в статус «В работе».' }]
   }

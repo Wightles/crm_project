@@ -90,6 +90,7 @@ function App() {
     if (!supabase) return
 
     let mounted = true
+    // после входа загружаем профиль и только доступные пользователю данные
     const loadUserData = async (userId: string) => {
       try {
         const [nextProfile, dashboard] = await Promise.all([getProfile(userId), loadDashboardData()])

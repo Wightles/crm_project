@@ -69,6 +69,7 @@ export async function getProfile(userId: string): Promise<Profile> {
 export async function loadDashboardData(): Promise<DashboardData> {
   if (!supabase) throw new Error('Supabase не настроен')
 
+  // отдельные запросы оставляем под rls, чтобы база сама ограничивала данные
   const [objectsResult, tasksResult, profilesResult] = await Promise.all([
     supabase.from('construction_objects').select('*').order('created_at', { ascending: false }),
     supabase.from('tasks').select('*').order('created_at', { ascending: false }),

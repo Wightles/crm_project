@@ -4,6 +4,7 @@ import type { Database } from '../types'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
+// без ключей можно спокойно открыть демо-режим и проверить интерфейс
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey)
 
 export const supabase = isSupabaseConfigured
