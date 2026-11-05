@@ -147,6 +147,49 @@ export async function createTask(input: {
   return data
 }
 
+export async function updateObject(id: string, name: string, address: string) {
+  if (!supabase) throw new Error('Supabase не настроен')
+  const { error } = await supabase
+    .from('construction_objects')
+    .update({ name, address })
+    .eq('id', id)
+
+  if (error) throw error
+}
+
+export async function deleteObject(id: string) {
+  if (!supabase) throw new Error('Supabase не настроен')
+  const { error } = await supabase.from('construction_objects').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function updateTask(input: {
+  id: string
+  title: string
+  description: string
+  objectId: string
+  assigneeId: string
+}) {
+  if (!supabase) throw new Error('Supabase не настроен')
+  const { error } = await supabase
+    .from('tasks')
+    .update({
+      title: input.title,
+      description: input.description,
+      object_id: input.objectId,
+      assignee_id: input.assigneeId,
+    })
+    .eq('id', input.id)
+
+  if (error) throw error
+}
+
+export async function deleteTask(id: string) {
+  if (!supabase) throw new Error('Supabase не настроен')
+  const { error } = await supabase.from('tasks').delete().eq('id', id)
+  if (error) throw error
+}
+
 export async function changeTaskStatus(taskId: string, status: TaskStatus, comment = '') {
   if (!supabase) throw new Error('Supabase не настроен')
   const { error } = await supabase.rpc('change_task_status', {

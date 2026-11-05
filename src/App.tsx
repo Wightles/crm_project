@@ -9,9 +9,11 @@ import {
   LayoutDashboard,
   LogOut,
   MapPin,
+  Pencil,
   Plus,
   Search,
   Settings,
+  Trash2,
   UserRound,
   X,
 } from 'lucide-react'
@@ -20,12 +22,16 @@ import {
   changeTaskStatus,
   createObject,
   createTask,
+  deleteObject,
+  deleteTask,
   getProfile,
   getTaskHistory,
   loadDashboardData,
   signIn,
   signOut,
   statusLabels,
+  updateObject,
+  updateTask,
   type DashboardData,
   type DashboardObject,
   type DashboardTask,
@@ -73,6 +79,8 @@ function App() {
   const [objectFilter, setObjectFilter] = useState<string | null>(null)
   const [showObjectForm, setShowObjectForm] = useState(false)
   const [showTaskForm, setShowTaskForm] = useState(false)
+  const [editingObject, setEditingObject] = useState<DashboardObject | null>(null)
+  const [editingTask, setEditingTask] = useState<DashboardTask | null>(null)
   const [loading, setLoading] = useState(isSupabaseConfigured)
   const [actionBusy, setActionBusy] = useState(false)
   const [authBusy, setAuthBusy] = useState(false)
@@ -142,17 +150,25 @@ function App() {
     }
   }
 
-  async function handleCreateObject(name: string, address: string) {
+  async function handleSaveObject(name: string, address: string, objectId?: string) {
     setActionBusy(true)
     setError(null)
     try {
+      if (!name || !address) throw new Error('Заполните название и адрес объекта')
       if (isSupabaseConfigured && session) {
-        await createObject(name, address, session.user.id)
+        if (objectId) await updateObject(objectId, name, address)
+        else await createObject(name, address, session.user.id)
         await refreshData()
       } else {
-        setDemoObjects((items) => [{ id: crypto.randomUUID(), name, address, taskCount: 0 }, ...items])
+        if (objectId) {
+          setDemoObjects((items) => items.map((item) => item.id === objectId ? { ...item, name, address } : item))
+          setDemoTasks((items) => items.map((task) => task.objectId === objectId ? { ...task, object: name } : task))
+        } else {
+          setDemoObjects((items) => [{ id: crypto.randomUUID(), name, address, taskCount: 0 }, ...items])
+        }
       }
       setShowObjectForm(false)
+      setEditingObject(null)
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : 'Не удалось создать объект')
     } finally {
@@ -160,35 +176,89 @@ function App() {
     }
   }
 
-  async function handleCreateTask(title: string, description: string, objectId: string, assigneeId: string) {
+  async function handleSaveTask(title: string, description: string, objectId: string, assigneeId: string, taskId?: string) {
     setActionBusy(true)
     setError(null)
     try {
+      if (!title) throw new Error('Введите название задачи')
       const object = objects.find((item) => item.id === objectId)
       const assignee = executors.find((item) => item.id === assigneeId)
       if (!object || !assignee) throw new Error('Выберите объект и исполнителя')
 
       if (isSupabaseConfigured && session) {
-        await createTask({ title, description, objectId, assigneeId, createdBy: session.user.id })
+        if (taskId) await updateTask({ id: taskId, title, description, objectId, assigneeId })
+        else await createTask({ title, description, objectId, assigneeId, createdBy: session.user.id })
         await refreshData()
       } else {
-        setDemoTasks((items) => [{
-          id: crypto.randomUUID(),
-          title,
-          object: object.name,
-          objectId,
-          assignee: assignee.full_name,
-          assigneeId,
-          description,
-          statusCode: 'new',
-          status: statusLabels.new,
-          createdAt: 'Только что',
-        }, ...items])
-        setDemoObjects((items) => items.map((item) => item.id === objectId ? { ...item, taskCount: item.taskCount + 1 } : item))
+        if (taskId) {
+          const oldTask = demoTasks.find((item) => item.id === taskId)
+          setDemoTasks((items) => items.map((item) => item.id === taskId ? { ...item, title, description, object: object.name, objectId, assignee: assignee.full_name, assigneeId } : item))
+          if (oldTask && oldTask.objectId !== objectId) {
+            setDemoObjects((items) => items.map((item) => {
+              if (item.id === oldTask.objectId) return { ...item, taskCount: Math.max(0, item.taskCount - 1) }
+              if (item.id === objectId) return { ...item, taskCount: item.taskCount + 1 }
+              return item
+            }))
+          }
+        } else {
+          setDemoTasks((items) => [{
+            id: crypto.randomUUID(),
+            title,
+            object: object.name,
+            objectId,
+            assignee: assignee.full_name,
+            assigneeId,
+            description,
+            statusCode: 'new',
+            status: statusLabels.new,
+            createdAt: 'Только что',
+          }, ...items])
+          setDemoObjects((items) => items.map((item) => item.id === objectId ? { ...item, taskCount: item.taskCount + 1 } : item))
+        }
       }
       setShowTaskForm(false)
+      setEditingTask(null)
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : 'Не удалось создать задачу')
+    } finally {
+      setActionBusy(false)
+    }
+  }
+
+  async function handleDeleteObject(object: DashboardObject) {
+    if (!window.confirm(`Удалить объект «${object.name}» и его задачи?`)) return
+    setActionBusy(true)
+    setError(null)
+    try {
+      if (isSupabaseConfigured) {
+        await deleteObject(object.id)
+        await refreshData()
+      } else {
+        setDemoObjects((items) => items.filter((item) => item.id !== object.id))
+        setDemoTasks((items) => items.filter((item) => item.objectId !== object.id))
+      }
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Не удалось удалить объект')
+    } finally {
+      setActionBusy(false)
+    }
+  }
+
+  async function handleDeleteTask(task: DashboardTask) {
+    if (!window.confirm(`Удалить задачу «${task.title}»?`)) return
+    setActionBusy(true)
+    setError(null)
+    try {
+      if (isSupabaseConfigured) {
+        await deleteTask(task.id)
+        await refreshData()
+      } else {
+        setDemoTasks((items) => items.filter((item) => item.id !== task.id))
+        setDemoObjects((items) => items.map((item) => item.id === task.objectId ? { ...item, taskCount: Math.max(0, item.taskCount - 1) } : item))
+      }
+      setSelectedTask(null)
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Не удалось удалить задачу')
     } finally {
       setActionBusy(false)
     }
@@ -274,7 +344,7 @@ function App() {
 
         <section className="page-content">
           {activeSection === 'Объекты' ? (
-            <ObjectsPanel objects={objects} manager={userRole === 'manager'} onAdd={() => setShowObjectForm(true)} onSelect={(id) => { setObjectFilter(id); setActiveSection('Обзор') }} />
+            <ObjectsPanel objects={objects} manager={userRole === 'manager'} onAdd={() => setShowObjectForm(true)} onEdit={setEditingObject} onDelete={(object) => void handleDeleteObject(object)} onSelect={(id) => { setObjectFilter(id); setActiveSection('Обзор') }} />
           ) : activeSection === 'Настройки' ? (
             <SettingsPanel profile={profile} demo={!isLive} />
           ) : (
@@ -290,9 +360,9 @@ function App() {
         </section>
       </main>
 
-      {showObjectForm && <ObjectForm busy={actionBusy} onClose={() => setShowObjectForm(false)} onSubmit={handleCreateObject} />}
-      {showTaskForm && <TaskForm objects={objects} executors={executors} busy={actionBusy} onClose={() => setShowTaskForm(false)} onSubmit={handleCreateTask} />}
-      {selectedTask && <TaskModal task={selectedTask} history={taskHistory} role={userRole} busy={actionBusy} onClose={() => setSelectedTask(null)} onStatusChange={handleStatusChange} />}
+      {(showObjectForm || editingObject) && <ObjectForm object={editingObject} busy={actionBusy} onClose={() => { setShowObjectForm(false); setEditingObject(null) }} onSubmit={handleSaveObject} />}
+      {(showTaskForm || editingTask) && <TaskForm task={editingTask} objects={objects} executors={executors} busy={actionBusy} onClose={() => { setShowTaskForm(false); setEditingTask(null) }} onSubmit={handleSaveTask} />}
+      {selectedTask && <TaskModal task={selectedTask} history={taskHistory} role={userRole} busy={actionBusy} onClose={() => setSelectedTask(null)} onEdit={() => { setEditingTask(selectedTask); setSelectedTask(null) }} onDelete={() => void handleDeleteTask(selectedTask)} onStatusChange={handleStatusChange} />}
     </div>
   )
 }
@@ -309,29 +379,29 @@ function TasksPanel({ tasks, manager, search, objectFilter, onSearch, onClearObj
   return <section className="panel tasks-panel"><div className="panel-heading"><div><p className="eyebrow">Рабочий список</p><h2>{objectFilter ? 'Задачи объекта' : 'Последние задачи'}</h2></div>{manager && <button className="primary-button" type="button" onClick={onAdd}><Plus size={17} />Новая задача</button>}</div><div className="table-toolbar"><label className="search-field"><Search size={17} /><input value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Поиск по задачам" /></label>{objectFilter && <button className="filter-button" type="button" onClick={onClearObjectFilter}>Сбросить фильтр<X size={15} /></button>}</div><div className="table-wrap"><table><thead><tr><th>Задача</th><th>Объект</th><th>Исполнитель</th><th>Статус</th><th>Создана</th></tr></thead><tbody>{tasks.length ? tasks.map((task) => <tr key={task.id}><td><button className="task-link" type="button" onClick={() => onSelect(task)}>{task.title}</button></td><td className="muted-cell">{task.object}</td><td><span className="assignee-cell"><span className="avatar avatar-small">{task.assignee.split(' ').map((name) => name[0]).join('')}</span>{task.assignee}</span></td><td><span className={`status-pill ${statusClass[task.status] ?? 'status-new'}`}>{task.status}</span></td><td className="muted-cell">{task.createdAt}</td></tr>) : <tr><td colSpan={5} className="empty-cell">Задач пока нет</td></tr>}</tbody></table></div></section>
 }
 
-function ObjectsPanel({ objects, manager, onAdd, onSelect }: { objects: DashboardObject[]; manager: boolean; onAdd: () => void; onSelect: (id: string) => void }) {
-  return <section className="objects-section"><div className="section-heading"><div><p className="eyebrow">Строительные площадки</p><h2>Объекты</h2></div>{manager && <button className="primary-button" type="button" onClick={onAdd}><Plus size={17} />Новый объект</button>}</div><div className="object-grid">{objects.length ? objects.map((object) => <button className="object-card" type="button" key={object.id} onClick={() => onSelect(object.id)}><div className="object-card-top"><span className="object-icon"><Building2 size={20} /></span><span className="object-task-count">{object.taskCount} задач</span></div><strong>{object.name}</strong><span className="object-address"><MapPin size={14} />{object.address}</span><span className="object-link">Открыть задачи</span></button>) : <div className="panel empty-state">Объектов пока нет</div>}</div></section>
+function ObjectsPanel({ objects, manager, onAdd, onEdit, onDelete, onSelect }: { objects: DashboardObject[]; manager: boolean; onAdd: () => void; onEdit: (object: DashboardObject) => void; onDelete: (object: DashboardObject) => void; onSelect: (id: string) => void }) {
+  return <section className="objects-section"><div className="section-heading"><div><p className="eyebrow">Строительные площадки</p><h2>Объекты</h2></div>{manager && <button className="primary-button" type="button" onClick={onAdd}><Plus size={17} />Новый объект</button>}</div><div className="object-grid">{objects.length ? objects.map((object) => <article className="object-card" key={object.id}><button className="object-card-main" type="button" onClick={() => onSelect(object.id)}><div className="object-card-top"><span className="object-icon"><Building2 size={20} /></span><span className="object-task-count">{object.taskCount} задач</span></div><strong>{object.name}</strong><span className="object-address"><MapPin size={14} />{object.address}</span><span className="object-link">Открыть задачи</span></button>{manager && <div className="object-actions"><button type="button" onClick={() => onEdit(object)}><Pencil size={14} />Изменить</button><button type="button" className="danger-link" onClick={() => onDelete(object)}><Trash2 size={14} />Удалить</button></div>}</article>) : <div className="panel empty-state">Объектов пока нет</div>}</div></section>
 }
 
 function SettingsPanel({ profile, demo }: { profile: Profile | null; demo: boolean }) {
   return <section className="panel settings-panel"><div className="settings-icon"><Settings size={20} /></div><p className="eyebrow">Профиль</p><h2>{profile?.full_name ?? 'Алексей Кузнецов'}</h2><p className="settings-description">Роль: {profile?.role === 'executor' ? 'исполнитель' : 'постановщик'}. {demo ? 'Сейчас открыт демонстрационный режим.' : 'Данные загружены из Supabase.'}</p></section>
 }
 
-function ObjectForm({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => void; onSubmit: (name: string, address: string) => Promise<void> }) {
-  const [name, setName] = useState('')
-  const [address, setAddress] = useState('')
-  return <Modal title="Новый объект" onClose={onClose}><form className="entity-form" onSubmit={(event) => { event.preventDefault(); void onSubmit(name.trim(), address.trim()) }}><Field label="Название объекта"><input value={name} onChange={(event) => setName(event.target.value)} placeholder="Например, ЖК «Северный парк»" required /></Field><Field label="Адрес"><input value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Город, улица, дом" required /></Field><FormActions busy={busy} onClose={onClose} submitLabel="Создать объект" /></form></Modal>
+function ObjectForm({ object, busy, onClose, onSubmit }: { object: DashboardObject | null; busy: boolean; onClose: () => void; onSubmit: (name: string, address: string, objectId?: string) => Promise<void> }) {
+  const [name, setName] = useState(object?.name ?? '')
+  const [address, setAddress] = useState(object?.address ?? '')
+  return <Modal title={object ? 'Редактирование объекта' : 'Новый объект'} onClose={onClose}><form className="entity-form" onSubmit={(event) => { event.preventDefault(); void onSubmit(name.trim(), address.trim(), object?.id) }}><Field label="Название объекта"><input value={name} onChange={(event) => setName(event.target.value)} placeholder="Например, ЖК «Северный парк»" required /></Field><Field label="Адрес"><input value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Город, улица, дом" required /></Field><FormActions busy={busy} onClose={onClose} submitLabel={object ? 'Сохранить' : 'Создать объект'} /></form></Modal>
 }
 
-function TaskForm({ objects, executors, busy, onClose, onSubmit }: { objects: DashboardObject[]; executors: Profile[]; busy: boolean; onClose: () => void; onSubmit: (title: string, description: string, objectId: string, assigneeId: string) => Promise<void> }) {
-  const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
-  const [objectId, setObjectId] = useState(objects[0]?.id ?? '')
-  const [assigneeId, setAssigneeId] = useState(executors[0]?.id ?? '')
-  return <Modal title="Новая задача" onClose={onClose}><form className="entity-form" onSubmit={(event) => { event.preventDefault(); void onSubmit(title.trim(), description.trim(), objectId, assigneeId) }}><Field label="Название задачи"><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Что нужно сделать" required /></Field><Field label="Описание"><textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Коротко опишите результат" rows={4} /></Field><Field label="Объект"><select value={objectId} onChange={(event) => setObjectId(event.target.value)} required>{objects.map((object) => <option key={object.id} value={object.id}>{object.name}</option>)}</select></Field><Field label="Исполнитель"><select value={assigneeId} onChange={(event) => setAssigneeId(event.target.value)} required>{executors.length ? executors.map((executor) => <option key={executor.id} value={executor.id}>{executor.full_name}</option>) : <option value="">Нет доступных исполнителей</option>}</select></Field><FormActions busy={busy} onClose={onClose} submitLabel="Создать задачу" /></form></Modal>
+function TaskForm({ task, objects, executors, busy, onClose, onSubmit }: { task: DashboardTask | null; objects: DashboardObject[]; executors: Profile[]; busy: boolean; onClose: () => void; onSubmit: (title: string, description: string, objectId: string, assigneeId: string, taskId?: string) => Promise<void> }) {
+  const [title, setTitle] = useState(task?.title ?? '')
+  const [description, setDescription] = useState(task?.description ?? '')
+  const [objectId, setObjectId] = useState(task?.objectId ?? objects[0]?.id ?? '')
+  const [assigneeId, setAssigneeId] = useState(task?.assigneeId ?? executors[0]?.id ?? '')
+  return <Modal title={task ? 'Редактирование задачи' : 'Новая задача'} onClose={onClose}><form className="entity-form" onSubmit={(event) => { event.preventDefault(); void onSubmit(title.trim(), description.trim(), objectId, assigneeId, task?.id) }}><Field label="Название задачи"><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Что нужно сделать" required /></Field><Field label="Описание"><textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Коротко опишите результат" rows={4} /></Field><Field label="Объект"><select value={objectId} onChange={(event) => setObjectId(event.target.value)} required>{objects.map((object) => <option key={object.id} value={object.id}>{object.name}</option>)}</select></Field><Field label="Исполнитель"><select value={assigneeId} onChange={(event) => setAssigneeId(event.target.value)} required>{executors.length ? executors.map((executor) => <option key={executor.id} value={executor.id}>{executor.full_name}</option>) : <option value="">Нет доступных исполнителей</option>}</select></Field><FormActions busy={busy} onClose={onClose} submitLabel={task ? 'Сохранить' : 'Создать задачу'} /></form></Modal>
 }
 
-function TaskModal({ task, history, role, busy, onClose, onStatusChange }: { task: DashboardTask; history: TaskHistoryItem[]; role: 'manager' | 'executor'; busy: boolean; onClose: () => void; onStatusChange: (status: TaskStatus, comment: string) => Promise<void> }) {
+function TaskModal({ task, history, role, busy, onClose, onEdit, onDelete, onStatusChange }: { task: DashboardTask; history: TaskHistoryItem[]; role: 'manager' | 'executor'; busy: boolean; onClose: () => void; onEdit: () => void; onDelete: () => void; onStatusChange: (status: TaskStatus, comment: string) => Promise<void> }) {
   const [comment, setComment] = useState('')
   const [validationError, setValidationError] = useState('')
   const actions = getTaskActions(task.statusCode, role)
@@ -342,7 +412,7 @@ function TaskModal({ task, history, role, busy, onClose, onStatusChange }: { tas
     }
     await onStatusChange(status, comment.trim())
   }
-  return <Modal title="Карточка задачи" onClose={onClose}><div className="task-detail"><div className="task-detail-heading"><div><p className="eyebrow">Задача</p><h2>{task.title}</h2></div><span className={`status-pill ${statusClass[task.status]}`}>{task.status}</span></div><div className="detail-grid"><DetailItem icon={<Building2 size={15} />} label="Объект" value={task.object} /><DetailItem icon={<UserRound size={15} />} label="Исполнитель" value={task.assignee} /></div><div className="description-block"><span>Описание</span><p>{task.description || 'Описание не добавлено'}</p></div>{actions.length > 0 && <div className="task-action"><div className="task-action-copy"><strong>Доступные действия</strong><span>{actions[0].hint}</span></div>{actions.some((item) => item.status === 'rework') && <textarea value={comment} onChange={(event) => { setComment(event.target.value); setValidationError('') }} placeholder="Комментарий для доработки" rows={3} />}{validationError && <p className="form-error">{validationError}</p>}<div className="action-buttons">{actions.map((action) => <button className={`primary-button ${action.status === 'rework' ? 'danger-button' : ''}`} type="button" key={action.status} onClick={() => void applyAction(action.status)} disabled={busy}>{busy ? 'Сохраняем...' : action.label}</button>)}</div></div>}<div className="history-block"><div className="history-heading"><History size={16} /><strong>История изменений</strong></div>{history.length ? history.map((item) => <div className="history-item" key={item.id}><span className="history-dot" /><div><strong>{item.changedBy}</strong><span>{item.fromStatus ? statusLabels[item.fromStatus] : 'Создание'} → {statusLabels[item.toStatus]} · {item.changedAt}</span>{item.comment && <p>{item.comment}</p>}</div></div>) : <p className="empty-history">Изменений статуса пока нет</p>}</div></div></Modal>
+  return <Modal title="Карточка задачи" onClose={onClose}><div className="task-detail"><div className="task-detail-heading"><div><p className="eyebrow">Задача</p><h2>{task.title}</h2></div><div className="task-heading-actions">{role === 'manager' && <><button className="modal-action" type="button" onClick={onEdit}><Pencil size={15} />Изменить</button><button className="modal-action danger-link" type="button" onClick={onDelete}><Trash2 size={15} />Удалить</button></>}<span className={`status-pill ${statusClass[task.status]}`}>{task.status}</span></div></div><div className="detail-grid"><DetailItem icon={<Building2 size={15} />} label="Объект" value={task.object} /><DetailItem icon={<UserRound size={15} />} label="Исполнитель" value={task.assignee} /></div><div className="description-block"><span>Описание</span><p>{task.description || 'Описание не добавлено'}</p></div>{actions.length > 0 && <div className="task-action"><div className="task-action-copy"><strong>Доступные действия</strong><span>{actions[0].hint}</span></div>{actions.some((item) => item.status === 'rework') && <textarea value={comment} onChange={(event) => { setComment(event.target.value); setValidationError('') }} placeholder="Комментарий для доработки" rows={3} />}{validationError && <p className="form-error">{validationError}</p>}<div className="action-buttons">{actions.map((action) => <button className={`primary-button ${action.status === 'rework' ? 'danger-button' : ''}`} type="button" key={action.status} onClick={() => void applyAction(action.status)} disabled={busy}>{busy ? 'Сохраняем...' : action.label}</button>)}</div></div>}<div className="history-block"><div className="history-heading"><History size={16} /><strong>История изменений</strong></div>{history.length ? history.map((item) => <div className="history-item" key={item.id}><span className="history-dot" /><div><strong>{item.changedBy}</strong><span>{item.fromStatus ? statusLabels[item.fromStatus] : 'Создание'} → {statusLabels[item.toStatus]} · {item.changedAt}</span>{item.comment && <p>{item.comment}</p>}</div></div>) : <p className="empty-history">Изменений статуса пока нет</p>}</div></div></Modal>
 }
 
 function getTaskActions(status: TaskStatus, role: 'manager' | 'executor') {
