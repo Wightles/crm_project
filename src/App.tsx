@@ -3,7 +3,6 @@ import type { Session } from '@supabase/supabase-js'
 import {
   Building2,
   CheckCircle2,
-  ChevronDown,
   ClipboardList,
   History,
   LayoutDashboard,
@@ -333,14 +332,14 @@ function App() {
         </nav>
         <div className="sidebar-footer">
           <NavItem icon={<Settings size={18} />} label="Настройки" active={activeSection === 'Настройки'} onClick={() => setActiveSection('Настройки')} />
-          <button className="profile-card" type="button"><span className="avatar avatar-blue">{initials}</span><span className="profile-copy"><strong>{userName}</strong><small>{userRole === 'executor' ? 'Исполнитель' : 'Постановщик'}</small></span><ChevronDown size={16} /></button>
+          <div className="profile-card"><span className="avatar avatar-blue">{initials}</span><span className="profile-copy"><strong>{userName}</strong><small>{userRole === 'executor' ? 'Исполнитель' : 'Постановщик'}</small></span></div>
         </div>
       </aside>
 
       <main className="main-content">
         <header className="topbar">
           <div><p className="eyebrow">Рабочее пространство</p><h1>{activeSection}</h1></div>
-          <div className="topbar-actions">{error && <span className="topbar-error">{error}</span>}<button className="icon-button" type="button" aria-label="Выйти" onClick={() => void handleSignOut()}><LogOut size={18} /></button><button className="user-chip" type="button"><span className="avatar avatar-blue">{initials}</span><span>{userName.split(' ')[0]}</span><ChevronDown size={16} /></button></div>
+          <div className="topbar-actions">{!isLive && <span className="demo-label">Демо-режим</span>}{error && <span className="topbar-error" role="alert">{error}</span>}{isLive && <button className="icon-button" type="button" aria-label="Выйти" title="Выйти" onClick={() => void handleSignOut()}><LogOut size={18} /></button>}</div>
         </header>
 
         <section className="page-content">
