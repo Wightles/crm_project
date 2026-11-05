@@ -38,6 +38,7 @@ import {
   type TaskHistoryItem,
 } from './lib/crm'
 import { isSupabaseConfigured, supabase } from './lib/supabase'
+import { getAvailableTaskActions } from './lib/workflow'
 import type { Profile, TaskStatus } from './types'
 
 const demoTasksSeed: DashboardTask[] = [
@@ -404,7 +405,7 @@ function TaskForm({ task, objects, executors, busy, onClose, onSubmit }: { task:
 function TaskModal({ task, history, role, busy, onClose, onEdit, onDelete, onStatusChange }: { task: DashboardTask; history: TaskHistoryItem[]; role: 'manager' | 'executor'; busy: boolean; onClose: () => void; onEdit: () => void; onDelete: () => void; onStatusChange: (status: TaskStatus, comment: string) => Promise<void> }) {
   const [comment, setComment] = useState('')
   const [validationError, setValidationError] = useState('')
-  const actions = getTaskActions(task.statusCode, role)
+  const actions = getAvailableTaskActions(task.statusCode, role)
   async function applyAction(status: TaskStatus) {
     if (status === 'rework' && !comment.trim()) {
       setValidationError('Добавьте комментарий для возврата на доработку')
@@ -413,17 +414,6 @@ function TaskModal({ task, history, role, busy, onClose, onEdit, onDelete, onSta
     await onStatusChange(status, comment.trim())
   }
   return <Modal title="Карточка задачи" onClose={onClose}><div className="task-detail"><div className="task-detail-heading"><div><p className="eyebrow">Задача</p><h2>{task.title}</h2></div><div className="task-heading-actions">{role === 'manager' && <><button className="modal-action" type="button" onClick={onEdit}><Pencil size={15} />Изменить</button><button className="modal-action danger-link" type="button" onClick={onDelete}><Trash2 size={15} />Удалить</button></>}<span className={`status-pill ${statusClass[task.status]}`}>{task.status}</span></div></div><div className="detail-grid"><DetailItem icon={<Building2 size={15} />} label="Объект" value={task.object} /><DetailItem icon={<UserRound size={15} />} label="Исполнитель" value={task.assignee} /></div><div className="description-block"><span>Описание</span><p>{task.description || 'Описание не добавлено'}</p></div>{actions.length > 0 && <div className="task-action"><div className="task-action-copy"><strong>Доступные действия</strong><span>{actions[0].hint}</span></div>{actions.some((item) => item.status === 'rework') && <textarea value={comment} onChange={(event) => { setComment(event.target.value); setValidationError('') }} placeholder="Комментарий для доработки" rows={3} />}{validationError && <p className="form-error">{validationError}</p>}<div className="action-buttons">{actions.map((action) => <button className={`primary-button ${action.status === 'rework' ? 'danger-button' : ''}`} type="button" key={action.status} onClick={() => void applyAction(action.status)} disabled={busy}>{busy ? 'Сохраняем...' : action.label}</button>)}</div></div>}<div className="history-block"><div className="history-heading"><History size={16} /><strong>История изменений</strong></div>{history.length ? history.map((item) => <div className="history-item" key={item.id}><span className="history-dot" /><div><strong>{item.changedBy}</strong><span>{item.fromStatus ? statusLabels[item.fromStatus] : 'Создание'} → {statusLabels[item.toStatus]} · {item.changedAt}</span>{item.comment && <p>{item.comment}</p>}</div></div>) : <p className="empty-history">Изменений статуса пока нет</p>}</div></div></Modal>
-}
-
-function getTaskActions(status: TaskStatus, role: 'manager' | 'executor') {
-  if (role === 'executor' && status === 'new') return [{ status: 'in_progress' as TaskStatus, label: 'Взять в работу', hint: 'Задача перейдёт в статус «В работе».' }]
-  if (role === 'executor' && status === 'in_progress') return [{ status: 'in_review' as TaskStatus, label: 'Отправить на проверку', hint: 'После выполнения передайте задачу постановщику.' }]
-  if (role === 'executor' && status === 'rework') return [{ status: 'in_progress' as TaskStatus, label: 'Вернуть в работу', hint: 'После исправлений снова возьмите задачу в работу.' }]
-  if (role === 'manager' && status === 'in_review') return [
-    { status: 'accepted' as TaskStatus, label: 'Принять задачу', hint: 'Задача будет отмечена как выполненная.' },
-    { status: 'rework' as TaskStatus, label: 'Вернуть на доработку', hint: 'Комментарий объяснит исполнителю, что исправить.' },
-  ]
-  return []
 }
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
